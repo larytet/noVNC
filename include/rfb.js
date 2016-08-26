@@ -28,6 +28,7 @@ var RFB;
         this._rfb_path = '';
 
         this._rfb_state = 'disconnected';
+        this._rfb_init_state = '';
         this._rfb_version = 0;
         this._rfb_max_version = 3.8;
         this._rfb_auth_scheme = '';
@@ -195,8 +196,10 @@ var RFB;
         this._sock = new Websock();
         this._sock.on('message', this._handle_message.bind(this));
         this._sock.on('open', function () {
-            if (this._rfb_state === 'connect') {
-                this._updateState('ProtocolVersion', "Starting VNC handshake");
+            if ((this._rfb_state === 'connect') &&
+                (this._rfb_init_state == '')) {
+                this._rfb_init_state = 'ProtocolVersion';
+                Util.Debug("Starting VNC handshake");
             } else {
                 this._fail("Got unexpected WebSocket connection");
             }
@@ -213,7 +216,7 @@ var RFB;
             }
             if (this._rfb_state === 'disconnect') {
                 this._updateState('disconnected', 'VNC disconnected' + msg);
-            } else if (this._rfb_state === 'ProtocolVersion') {
+            } else if (this._rfb_state === 'connect') {
                 this._fail('Failed to connect to server' + msg);
             } else if (this._rfb_state in {'failed': 1, 'disconnected': 1}) {
                 Util.Error("Received onclose while disconnected" + msg);
@@ -252,6 +255,7 @@ var RFB;
                 return this._fail("Must set host and port");
             }
 
+            this._rfb_init_state = '';
             this._updateState('connect');
             return true;
         },
@@ -418,19 +422,12 @@ var RFB;
          * Page states:
          *   loaded       - page load, equivalent to disconnected
          *   disconnected - idle state
-         *   connect      - starting to connect (to ProtocolVersion)
+         *   connect      - starting to connect
          *   normal       - connected
          *   disconnect   - starting to disconnect
          *   failed       - abnormal disconnect
          *   fatal        - failed to load page, or fatal error
          *
-         * RFB protocol initialization states:
-         *   ProtocolVersion
-         *   Security
-         *   Authentication
-         *   SecurityResult
-         *   ClientInitialization - not triggered by server message
-         *   ServerInitialization (to normal)
          */
         _stateQueue: new Array(),
         _updateState: function (state, statusMsg) {
@@ -698,7 +695,9 @@ var RFB;
             var cversion = "00" + parseInt(this._rfb_version, 10) +
                            ".00" + ((this._rfb_version * 10) % 10);
             this._sock.send_string("RFB " + cversion + "\n");
-            this._updateState('Security', 'Sent ProtocolVersion: ' + cversion);
+            Util.Debug('Sent ProtocolVersion: ' + cversion);
+
+            this._rfb_init_state = 'Security';
         },
 
         _negotiate_security: function () {
@@ -742,7 +741,9 @@ var RFB;
                 this._rfb_auth_scheme = this._sock.rQshift32();
             }
 
-            this._updateState('Authentication', 'Authenticating using scheme: ' + this._rfb_auth_scheme);
+            this._rfb_init_state = 'Authentication';
+            Util.Debug('Authenticating using scheme: ' + this._rfb_auth_scheme);
+
             return this._init_msg(); // jump to authentication
         },
 
@@ -779,7 +780,7 @@ var RFB;
             var challenge = Array.prototype.slice.call(this._sock.rQshiftBytes(16));
             var response = RFB.genDES(this._rfb_password, challenge);
             this._sock.send(response);
-            this._updateState("SecurityResult");
+            this._rfb_init_state = "SecurityResult";
             return true;
         },
 
@@ -847,7 +848,7 @@ var RFB;
 
                     switch (authType) {
                         case 'STDVNOAUTH__':  // no auth
-                            this._updateState('SecurityResult');
+                            this._rfb_init_state = 'SecurityResult';
                             return true;
                         case 'STDVVNCAUTH_': // VNC auth
                             this._rfb_auth_scheme = 2;
@@ -871,10 +872,10 @@ var RFB;
 
                 case 1:  // no auth
                     if (this._rfb_version >= 3.8) {
-                        this._updateState('SecurityResult');
+                        this._rfb_init_state = 'SecurityResult';
                         return true;
                     }
-                    this._updateState('ClientInitialisation', "No auth required");
+                    this._rfb_init_state = 'ClientInitialisation';
                     return this._init_msg();
 
                 case 22:  // XVP auth
@@ -895,7 +896,8 @@ var RFB;
             if (this._sock.rQwait('VNC auth response ', 4)) { return false; }
             switch (this._sock.rQshift32()) {
                 case 0:  // OK
-                    this._updateState('ClientInitialisation', 'Authentication OK');
+                    this._rfb_init_state = 'ClientInitialisation';
+                    Util.Debug('Authentication OK');
                     return this._init_msg();
                 case 1:  // failed
                     if (this._rfb_version >= 3.8) {
@@ -1031,7 +1033,7 @@ var RFB;
         },
 
         _init_msg: function () {
-            switch (this._rfb_state) {
+            switch (this._rfb_init_state) {
                 case 'ProtocolVersion':
                     return this._negotiate_protocol_version();
 
@@ -1046,7 +1048,7 @@ var RFB;
 
                 case 'ClientInitialisation':
                     this._sock.send([this._shared ? 1 : 0]); // ClientInitialisation
-                    this._updateState('ServerInitialisation', "Authentication OK");
+                    this._rfb_init_state = 'ServerInitialisation';
                     return true;
 
                 case 'ServerInitialisation':
