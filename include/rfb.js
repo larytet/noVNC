@@ -441,6 +441,8 @@ var RFB;
                 return;
             }
 
+            this._rfb_state = state;
+
             /*
              * These are disconnected states. A previous connect may
              * asynchronously cause a connection so make sure we are closed.
@@ -462,14 +464,7 @@ var RFB;
                 Util.Warn(cmsg);
             }
 
-            if (oldstate === 'failed' && state === 'disconnected') {
-                // do disconnect action, but stay in failed state
-                this._rfb_state = 'failed';
-            } else {
-                this._rfb_state = state;
-            }
-
-            if (this._disconnTimer && this._rfb_state !== 'disconnect') {
+            if (this._disconnTimer && state !== 'disconnect') {
                 Util.Debug("Clearing disconnect timer");
                 clearTimeout(this._disconnTimer);
                 this._disconnTimer = null;
@@ -507,12 +502,6 @@ var RFB;
                     } else if (oldstate === 'init') {
                         Util.Error("Error while initializing.");
                     }
-
-                    // Make sure we transition to disconnected
-                    setTimeout(function () {
-                        this._updateState('disconnected');
-                    }.bind(this), 50);
-
                     break;
 
                 default:
@@ -520,9 +509,17 @@ var RFB;
             }
 
             if (oldstate === 'failed' && state === 'disconnected') {
+                // do disconnect action, but stay in failed state and
+                // keep the previous status message
+                this._rfb_state = 'failed';
                 this._onUpdateState(this, state, oldstate);
             } else {
                 this._onUpdateState(this, state, oldstate, statusMsg);
+            }
+
+            // Make sure we transition to disconnected
+            if (state === 'failed') {
+                this._updateState('disconnected');
             }
         },
 
