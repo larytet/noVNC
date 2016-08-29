@@ -438,6 +438,7 @@ var RFB;
             if (state === oldstate) {
                 // Already here, ignore
                 Util.Debug("Already in state '" + state + "', ignoring");
+                return;
             }
 
             /*
