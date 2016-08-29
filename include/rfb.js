@@ -1120,7 +1120,7 @@ var RFB;
 
             switch (xvp_msg) {
                 case 0:  // XVP_FAIL
-                    this._updateState(this._rfb_state, "Operation Failed");
+                    Util.Error("Operation Failed");
                     break;
                 case 1:  // XVP_INIT
                     this._rfb_xvp_ver = xvp_ver;

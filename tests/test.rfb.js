@@ -1706,13 +1706,6 @@ describe('Remote Frame Buffer Protocol Client', function() {
                 client._fb_height = 32;
             });
 
-            it('should call updateState with a message on XVP_FAIL, but keep the same state', function () {
-                client._updateState = sinon.spy();
-                client._sock._websocket._receive_data(new Uint8Array([250, 0, 10, 0]));
-                expect(client._updateState).to.have.been.calledOnce;
-                expect(client._updateState).to.have.been.calledWith('normal', 'Operation Failed');
-            });
-
             it('should set the XVP version and fire the callback with the version on XVP_INIT', function () {
                 client.set_onXvpInit(sinon.spy());
                 client._sock._websocket._receive_data(new Uint8Array([250, 0, 10, 1]));
