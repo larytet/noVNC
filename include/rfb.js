@@ -432,7 +432,21 @@ var RFB;
          *   ClientInitialization - not triggered by server message
          *   ServerInitialization (to normal)
          */
+        _stateQueue: new Array(),
         _updateState: function (state, statusMsg) {
+            /* Recursion protection */
+            this._stateQueue.push(new Array(state, statusMsg));
+            if (this._stateQueue.length > 1) {
+                return;
+            }
+
+            while (this._stateQueue.length > 0) {
+                var entry = this._stateQueue[0];
+                this._realUpdateState(entry[0], entry[1]);
+                this._stateQueue.shift();
+            }
+        },
+        _realUpdateState: function (state, statusMsg) {
             var oldstate = this._rfb_state;
 
             if (state === oldstate) {
