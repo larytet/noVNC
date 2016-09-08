@@ -657,6 +657,7 @@ var RFB;
                     break;
                 case "003.003":
                 case "003.006":  // UltraVNC
+                case "003.016":  // UltraVNC SC_II_RC23
                 case "003.889":  // Apple Remote Desktop
                     this._rfb_version = 3.3;
                     break;
